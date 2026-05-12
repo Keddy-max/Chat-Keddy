@@ -1,0 +1,5 @@
+{
+  "name": "Keddy AI",
+  "description": "Your powerful, highly intelligent, and helpful Ghanaian AI assistant. Keddy speaks Pidgin, understands Ghanaian culture, and generates stunning AI imagery using Flux.",
+  "requestFramePermissions": ["geolocation"]
+}

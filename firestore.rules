@@ -1,0 +1,124 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (uid from auth)
+    // Fields:
+    //   - uid: string (required) - The unique identifier for the user.
+    //   - email: string (required) - The user's email address.
+    //   - displayName: string (optional) - The user's display name.
+    //   - photoURL: string (optional) - The URL of the user's profile picture.
+    //   - role: string (required) - The user's role ('admin' or 'user').
+    //   - createdAt: string (required) - The time the user was created.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource (for user-owned documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Validate required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate ISO 8601 date string format (YYYY-MM-DDTHH:MM:SS)
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+    
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate User document
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500)) &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    // Check if user is an admin
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "princeked2007@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // Validate Session document
+    function isValidSession(data) {
+      return hasOnlyAllowedFields(['messages', 'updatedAt', 'title']) &&
+             (!('messages' in data) || (data.messages is string && data.messages.size() < 1000000)) && // 1MB limit for messages
+             (!('title' in data) || (data.title is string && data.title.size() < 200)) &&
+             data.updatedAt is string && isValidDateString(data.updatedAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile, admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile, but cannot assign themselves 'admin' role unless they are already an admin
+      allow create: if isAuthenticated() && 
+                    isValidUser(request.resource.data) && 
+                    isOwner(userId) && 
+                    request.resource.data.uid == userId &&
+                    ((request.resource.data.role == 'user') || isAdmin());
+                    
+      // Users can update their own profile, but cannot change their role, uid, or createdAt
+      allow update: if isAuthenticated() && 
+                    isValidUser(request.resource.data) && 
+                    isOwner(userId) && 
+                    request.resource.data.uid == resource.data.uid &&
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    ((request.resource.data.role == resource.data.role) || isAdmin());
+                    
+      // Only admins can delete users
+      allow delete: if isAdmin();
+
+      match /sessions/{sessionId} {
+        // Only the user can read their own sessions
+        allow read: if isOwner(userId);
+        
+        // Only the user can create their own sessions
+        allow create: if isOwner(userId) && isValidSession(request.resource.data);
+        
+        // Only the user can update their own sessions
+        allow update: if isOwner(userId) && isValidSession(request.resource.data);
+        
+        // Only the user can delete their own sessions
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
