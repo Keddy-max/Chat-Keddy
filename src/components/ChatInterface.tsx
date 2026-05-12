@@ -275,9 +275,12 @@ export default function ChatInterface({ sessionId, onUpdateTitle, onToggleSideba
     setShowCommands(false);
   };
 
+  const inFlightRef = useRef<boolean>(false);
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && !attachment) || isLoading) return;
+    if ((!input.trim() && !attachment) || isLoading || inFlightRef.current) return;
     setShowCommands(false);
 
     if (isListening) {
@@ -288,7 +291,9 @@ export default function ChatInterface({ sessionId, onUpdateTitle, onToggleSideba
     setInput('');
     const currentAttachment = attachment;
     setAttachment(null);
+    inFlightRef.current = true;
     setIsLoading(true);
+
 
     if (messages.length === 1 && userMessage) {
       // First user message, update title
@@ -618,6 +623,7 @@ Please try again in a bit!`;
         isStreaming: false
       } : msg));
     } finally {
+      inFlightRef.current = false;
       setIsLoading(false);
     }
   };
