@@ -69,7 +69,7 @@ export async function* groqChatStream({ model, messages, temperature = 0.7, sign
       if (data === '[DONE]') return;
 
       try {
-        const chunk = JSON.parse(data) as ChatCompletionChunk as any;
+        const chunk = JSON.parse(data) as any;
         const delta = chunk?.choices?.[0]?.delta;
         const token = delta?.content;
         if (token) yield token as string;
