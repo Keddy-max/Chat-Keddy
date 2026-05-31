@@ -21,9 +21,9 @@ function toOpenAIMessages(messages: GroqChatMessage[]) {
 }
 
 export async function* groqChatStream({ model, messages, temperature = 0.7, signal }: GroqChatOptions) {
-  const apiKey = (typeof window === 'undefined')
-    ? process.env.GROQ_API_KEY
-    : (import.meta as any).env?.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY;
+  const apiKey =
+    process.env.GROQ_API_KEY ||
+    import.meta.env.VITE_GROQ_API_KEY;
 
   if (!apiKey) {
     throw new Error('API_KEY_MISSING');
